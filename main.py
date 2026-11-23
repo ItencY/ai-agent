@@ -15,6 +15,7 @@ def main():
     )
     parser = argparse.ArgumentParser(description="Chat with OpenRouter API")
     parser.add_argument("user_prompt", type=str, help="User prompt to send to the OpenRouter API")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
     messages = [
         {
@@ -26,11 +27,12 @@ def main():
         model="openrouter/free",
         messages=messages,
     )
-    if response.usage is not None:
+    if args.verbose:
+        print(f"User prompt: {args.user_prompt}")
         print(f"Prompt tokens: {response.usage.prompt_tokens}")
         print(f"Response tokens: {response.usage.completion_tokens}")
-    else:
-        raise RuntimeError("Response usage is None. Unable to retrieve token usage information.")
+    if not response.usage:
+        raise RuntimeError("Response usage information is missing.")
     print(response.choices[0].message.content)
 
 
