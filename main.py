@@ -1,8 +1,10 @@
 import os
 import argparse
+import json
 from dotenv import load_dotenv
 from openai import OpenAI
 from prompts import system_prompt
+from call_function import available_functions
 
 def main():
     load_dotenv()  # Load environment variables from .env file
@@ -25,6 +27,7 @@ def main():
     response = client.chat.completions.create(
         model="openrouter/free",
         messages=messages,
+        tools=available_functions,
     )
     if args.verbose:
         print(f"User prompt: {args.user_prompt}")
@@ -32,7 +35,13 @@ def main():
         print(f"Response tokens: {response.usage.completion_tokens}")
     if not response.usage:
         raise RuntimeError("Response usage information is missing.")
-    print(response.choices[0].message.content)
+    message = response.choices[0].message
+    if message.tool_calls:
+        for tool_call in message.tool_calls:
+            function_args = json.loads(tool_call.function.arguments or "{}")
+            print(f"Calling function: {tool_call.function.name}({function_args})")
+    else:
+        print(message.content)
 
 
 if __name__ == "__main__":
