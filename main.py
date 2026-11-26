@@ -1,10 +1,11 @@
 import os
 import argparse
-import json
+import sys
 from dotenv import load_dotenv
 from openai import OpenAI
 from prompts import system_prompt
-from call_function import available_functions
+from call_function import available_functions, call_function
+
 
 def main():
     load_dotenv()  # Load environment variables from .env file
@@ -24,24 +25,40 @@ def main():
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": args.user_prompt},
     ]
-    response = client.chat.completions.create(
-        model="openrouter/free",
-        messages=messages,
-        tools=available_functions,
-    )
     if args.verbose:
         print(f"User prompt: {args.user_prompt}")
-        print(f"Prompt tokens: {response.usage.prompt_tokens}")
-        print(f"Response tokens: {response.usage.completion_tokens}")
-    if not response.usage:
-        raise RuntimeError("Response usage information is missing.")
-    message = response.choices[0].message
-    if message.tool_calls:
+
+    for _ in range(20):
+        response = client.chat.completions.create(
+            model="openrouter/free",
+            messages=messages,
+            tools=available_functions,
+        )
+        if not response.usage:
+            raise RuntimeError("Response usage information is missing.")
+        if args.verbose:
+            print(f"Prompt tokens: {response.usage.prompt_tokens}")
+            print(f"Response tokens: {response.usage.completion_tokens}")
+
+        message = response.choices[0].message
+        messages.append(message)
+        if not message.tool_calls:
+            print(message.content)
+            return
+
         for tool_call in message.tool_calls:
-            function_args = json.loads(tool_call.function.arguments or "{}")
-            print(f"Calling function: {tool_call.function.name}({function_args})")
-    else:
-        print(message.content)
+            result_message = call_function(tool_call, args.verbose)
+            if not result_message.get("content"):
+                raise RuntimeError("Function call returned an empty tool message.")
+            if args.verbose:
+                print(f"-> {result_message['content']}")
+            messages.append(result_message)
+
+    print(
+        "Error: Maximum number of model iterations (20) reached without a final response.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 
 if __name__ == "__main__":
